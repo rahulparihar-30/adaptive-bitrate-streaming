@@ -11,16 +11,22 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.859.0",
+    "@aws-sdk/lib-storage": "^3.859.0",
     "body-parser": "^2.2.0",
+    "bullmq": "^5.56.9",
     "cors": "^2.8.5",
     "dotenv": "^17.1.0",
     "express": "^5.1.0",
     "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.3",
+    "ioredis": "^5.7.0",
     "multer": "^2.0.1",
+    "multer-s3": "^3.0.1",
     "pg": "^8.16.3",
     "socket.io": "^4.8.1",
     "socketio": "^1.0.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "video.js": "^8.23.3"
   }
 }
