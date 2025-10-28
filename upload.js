@@ -6,24 +6,27 @@ import dotenv from "dotenv"
 dotenv.config()
 
 const s3 = new S3Client({
-  region: process.env.AWS_REGION,
+  region: "auto",
+  endpoint:process.env.CLOUDFLARE_R2_API,
   credentials:{
-    accessKeyId:process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey:process.env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId:process.env.CLOUDFLARE_ACCESS_KEY_ID,
+    secretAccessKey:process.env.CLOUDFLARE_SECRET_ACCESS_KEY,
   }
 });
 
 const uploadFile = async (filePath) => {
   const fileStream = fs.createReadStream(filePath);
+  const s3Key = path.posix.join(process.env.CLOUDFLARE_BUCKET_NAME, path.basename(filePath)); // ensures forward slashes
   console.log(filePath)
   try {
     const upload = new Upload({
       client: s3,
       params: {
-        Bucket: process.env.S3_BUCKET_NAME,
-        Key: "videos/",
+        Bucket: process.env.CLOUDFLARE_BUCKET_NAME,
+        Key: s3Key,
         Body: fileStream,
       },
+      forcePathStyle: true,
     });
     const response = await upload.done();
     console.log(`Successfully uploaded ${filePath} to S3 as ${s3Key}`);
