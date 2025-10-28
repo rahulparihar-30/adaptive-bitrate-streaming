@@ -9,9 +9,9 @@ const publisher = new Redis({
 })
 
 const worker = new Worker('transcoding',async (job) => {
-    const {videoId,filekey} = job.data
+    const {videoId,filePath} = job.data
     try{
-        await transcodeVideo(filekey,videoId,publisher);
+        await transcodeVideo(filePath,videoId,publisher);
     }catch(err){
         console.log("Error Transcoding \n" + err)
     }

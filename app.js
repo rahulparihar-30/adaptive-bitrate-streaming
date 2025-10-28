@@ -43,7 +43,7 @@ app.use('/hls', express.static(path.join(__dirname, 'hls')));
 // File upload setup
 const s3Storage = multerS3({
   s3: s3,
-  bucket: process.env.S3_BUCKET_NAME,
+  bucket: process.env.CLOUDFLARE_BUCKET_NAME,
   metadata: function (req, file, cb) {
     cb(null, { fieldName: file.fieldname });
   },
@@ -57,7 +57,16 @@ const s3Storage = multerS3({
   contentType: multerS3.AUTO_CONTENT_TYPE,
 });
 
-const store = multer({ storage:s3Storage });
+const videoStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, "videos/"),
+  filename: (req, file, cb) => {
+    const newFilename = `${id()}-${file.originalname.replace(/\s+/g, "_")}`;
+    cb(null, newFilename);
+  },
+});
+
+// Correct way to create the multer instance
+const store = multer({ storage: videoStorage });
 
 const thumbStorage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, "thumbnails/"),
@@ -86,68 +95,92 @@ app.get("/", (req, res) => {
   res.sendFile(join(__dirname, "public/static/index.html"));
 });
 
-// app.post("/upload", store.single("video"), async (req, res) => {
-//   if (!req.file) return res.status(400).send("No video uploaded");
-//     const newPath = req.file.key;
-//   const videoId = id();
-//   // const newPath = path.join(req.file.destination, fileName(videoId,req.file.originalname)).split(path.sep).join("/")
-//   try {
-//     fs.renameSync(req.file.path, newPath);
-//   } catch (err) {
-//     console.error("File rename failed:", err);
-//     return res.status(500).send("Internal server error while renaming the file.");
-//   }
 
+// app.post("/upload", store.single("video"), async (req, res) => {
+//   if (!req.file) {
+//     return res.status(400).send("No video uploaded");
+//   }
+  
+//   // The file is already uploaded to S3.
+//   // req.file.key contains the S3 key you defined in the s3Storage config.
+//   const videoS3Key = req.file;
+//   const videoId = id();
+//   console.log(videoS3Key)
 //   try {
 //     const cmd = "INSERT INTO video_files(id, original_file_path) VALUES ($1, $2)";
-//     await pooldb.query(cmd, [videoId, newPath]);
-//     console.log(newPath)
+//     // Use the S3 key to store in your database.
+//     await pooldb.query(cmd, [videoId, videoS3Key]);
+//     console.log(videoS3Key);
 //   } catch (err) {
 //     console.error("Error inserting metadata:", err);
 //     return res.status(500).send("Internal server error while storing metadata.");
 //   }
-//   // console.log("File Has been Uploaded. Transcoding Started...")
-//   // await transcodeVideo(newPath,res,io);/// I'm Here 
-//   res.status(200).send({ message: "File received", id: videoId,fileUrl:newPath });
+
+//   try{
+//     const transResponse = await transcodingQueue.add('transcode_video',{
+//       videoId:videoId,
+//       filekey:req.file.key,
+//     },{
+//       attempts: 3,
+//     backoff: {
+//       type: 'exponential',
+//       delay: 5000,
+//     },
+//     });
+//     console.log("Queue has been created. "+ transResponse)
+//   }catch(err){
+//     console.log("Error adding in Queue\n" + err);
+//   }
+  
+//   res.status(200).send({ message: "File received", id: videoId, fileUrl: videoS3Key });
 // });
+// Disk storage for videos
+
+
+// Route to upload locally
 
 app.post("/upload", store.single("video"), async (req, res) => {
   if (!req.file) {
     return res.status(400).send("No video uploaded");
   }
-  
-  // The file is already uploaded to S3.
-  // req.file.key contains the S3 key you defined in the s3Storage config.
-  const videoS3Key = req.file.location;
+
+  const localPath = path.join("videos", req.file.filename);
   const videoId = id();
 
   try {
     const cmd = "INSERT INTO video_files(id, original_file_path) VALUES ($1, $2)";
-    // Use the S3 key to store in your database.
-    await pooldb.query(cmd, [videoId, videoS3Key]);
-    console.log(videoS3Key);
+    await pooldb.query(cmd, [videoId, localPath]);
+    console.log("Saved metadata for", localPath);
   } catch (err) {
     console.error("Error inserting metadata:", err);
     return res.status(500).send("Internal server error while storing metadata.");
   }
 
-  try{
-    const transResponse = await transcodingQueue.add('transcode_video',{
-      videoId:videoId,
-      filekey:req.file.key,
-    },{
-      attempts: 3,
-    backoff: {
-      type: 'exponential',
-      delay: 5000,
-    },
-    });
-    console.log("Queue has been created. "+ transResponse)
-  }catch(err){
+  try {
+    const transResponse = await transcodingQueue.add(
+      "transcode_video",
+      {
+        videoId: videoId,
+        filePath: localPath, // send local path to transcoder
+      },
+      {
+        attempts: 3,
+        backoff: {
+          type: "exponential",
+          delay: 5000,
+        },
+      }
+    );
+    console.log("Queue has been created:", transResponse.id);
+  } catch (err) {
     console.log("Error adding in Queue\n" + err);
   }
-  
-  res.status(200).send({ message: "File received", id: videoId, fileUrl: videoS3Key });
+
+  res.status(200).send({
+    message: "File received",
+    id: videoId,
+    fileUrl: `/videos/${req.file.filename}`,
+  });
 });
 
 

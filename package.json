@@ -28,5 +28,8 @@
     "socketio": "^1.0.0",
     "uuid": "^11.1.0",
     "video.js": "^8.23.3"
+  },
+  "devDependencies": {
+    "wrangler": "^4.45.0"
   }
 }

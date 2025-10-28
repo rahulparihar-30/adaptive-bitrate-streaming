@@ -17,35 +17,25 @@ const resolutions = [
 ];
 
 export default async function transcodeVideo(inputPath, videoId, publisher) {
-  const bucketName = process.env.S3_BUCKET_NAME;
-  const region = process.env.AWS_REGION;
+  const bucketName = process.env.CLOUDFLARE_BUCKET_NAME;
+  const region = "auto";
 
   const fileName = path.basename(inputPath);
   const folderName = fileName.substring(0, fileName.lastIndexOf("."));
   const outputDir = path.join("./abr-youtube", folderName);
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
+
   console.log(`Starting transcoding for: ${inputPath}`);
 
   // Download source video from S3 if not already local
-  const localInputPath = path.join(outputDir, fileName);
-  if (!fs.existsSync(localInputPath)) {
-    console.log("Downloading video from S3...");
-    const { Body } = await s3.send(
-      new GetObjectCommand({ Bucket: bucketName, Key: inputPath })
-    );
-    await new Promise((resolve, reject) => {
-      const writeStream = fs.createWriteStream(localInputPath);
-      Body.pipe(writeStream);
-      Body.on("error", reject);
-      writeStream.on("finish", resolve);
-    });
-  }
+  const localInputPath = inputPath
 
   const masterPlaylistContent = ["#EXTM3U", "#EXT-X-VERSION:3"];
   const transcodingPromises = [];
 
   for (const resDef of resolutions) {
+    console.log("Transcoding for " + resolutions)
     transcodingPromises.push(
       new Promise((resolve, reject) => {
         const outputFolderName = path.join(outputDir, resDef.name);
@@ -107,12 +97,13 @@ export default async function transcodeVideo(inputPath, videoId, publisher) {
             );
             resolve();
           })
-          .on("error", (err) => {
+          .on("error", (err,stdout, stderr) => {
             console.error(`Error transcoding ${resDef.name}:`, err.message);
             publisher.publish(
               PROGRESS_CHANNEL,
               JSON.stringify({ videoId, resolution: resDef.name, status: "failed" })
             );
+            console.log(stderr)
             reject(err);
           })
           .run();
@@ -137,7 +128,7 @@ export default async function transcodeVideo(inputPath, videoId, publisher) {
   }
 
   // Upload folder to S3
-  const s3Prefix = `transcoded_videos/${folderName}/`;
+  const s3Prefix = `${folderName}/`;
   await uploadFolderToS3(outputDir, s3Prefix, bucketName);
 
   // Remove local folder
@@ -145,7 +136,7 @@ export default async function transcodeVideo(inputPath, videoId, publisher) {
   console.log(`Local folder deleted: ${outputDir}`);
 
   // Return playlist URL
-  const playlistUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${s3Prefix}master.m3u8`;
+const playlistUrl = `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com/${bucketName}/${s3Prefix}master.m3u8`;
   publisher.publish(
     PROGRESS_CHANNEL,
     JSON.stringify({
