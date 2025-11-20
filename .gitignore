@@ -7,3 +7,12 @@ videos
 video-Streaming_accessKeys.csv
 video-Streaming_credentials.csv
 thumbnails/
+logs/
+app.js
+app2.js
+controller.js
+queue.js
+transcoder.js
+upload.js
+workers.js
+images/
