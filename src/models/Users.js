@@ -28,6 +28,10 @@ const User = sequelize.define('User',{
     profilePictureUrl:{
         type:DataTypes.STRING,
         allowNull:true,
+    },
+    refreshToken:{
+        type:DataTypes.STRING,
+        allowNull:true,
     }
 },{
     timestamps:true

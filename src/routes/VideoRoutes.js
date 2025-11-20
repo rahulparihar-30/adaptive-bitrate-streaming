@@ -4,6 +4,7 @@ import { saveVideo } from "../storage/localStorage.js";
 import { transcodingQueue } from "../scheduler/queue.js";
 import { v4 as uuid } from "uuid";
 import { logger } from "../../index.js";
+import { verifyAccessToken } from "../middleware/authMiddleware.js";
 
 const videoRoutes = Router();
 
@@ -39,60 +40,64 @@ videoRoutes.get("/", async (req, res) => {
 
     res.json(videos);
   } catch (err) {
-    logger.error("Error Fetching Videos "+err)
+    logger.error("Error Fetching Videos " + err);
     res.status(500).json({ error: "Error Fetching Videos" });
   }
 });
 
-videoRoutes.post("/upload", saveVideo.single("video"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).send("No video uploaded");
-  }
-  const { title, description, category,visibility } = req.body;
-  const userId = req.body.id;
-  const id = uuid();
-
-
-  try {
-    const user = await User.findByPk(userId);
-    if (!user) return res.status(404).json({ error: "User Not found" });
-    validateCategory(category);
-    const newVideo = Video.create({
-      id,
-      title,
-      description,
-      category,
-      visibility,
-      userId,
-    });
-
-    // Queue
-    try {
-      await transcodingQueue.add(
-        "transcoding",
-        {
-          filePath: req.file.filename,videoId:id
-        },
-        {
-          attempts: 3,
-          backoff: {
-            type: "exponential",
-            delay: 5000,
-          },
-        }
-      );
-    } catch (error) {
-      logger.error("Error adding job in the queue.")
-      res.status(500).json({ error: "Error adding job in the queue." });
+videoRoutes.post(
+  "/upload",
+  verifyAccessToken,
+  saveVideo.single("video"),
+  async (req, res) => {
+    if (!req.file) {
+      return res.status(400).send("No video uploaded");
     }
-    res.status(201).json({message:"Video Uploaded Successfully.",channel:`transcoding-status:${id}`});
-  } catch (err) {
-    logger.error("Error uploading Video")
-    res.status(500).json({ error: "Error uploading Video" });
-  }
-});
+    const userId = req.body.id;
+    const id = uuid();
 
-videoRoutes.put(":id/title", async (req, res) => {
+    try {
+      const user = await User.findByPk(userId);
+      if (!user) return res.status(404).json({ error: "User Not found" });
+
+      const newVideo = await Video.create({
+        id,
+        userId,
+      });
+
+      // Queue
+      try {
+        await transcodingQueue.add(
+          "transcoding",
+          {
+            filePath: req.file.filename,
+            videoId: id,
+          },
+          {
+            attempts: 3,
+            backoff: {
+              type: "exponential",
+              delay: 5000,
+            },
+          }
+        );
+      } catch (error) {
+        logger.error("Error adding job in the queue.");
+        res.status(500).json({ error: "Error adding job in the queue." });
+      }
+      res.status(201).json({
+        message: "Video Uploaded Successfully.",
+        channel: `transcoding-status:${id}`,
+        videoId: newVideo.id,
+      });
+    } catch (err) {
+      logger.error("Error uploading Video: ", err);
+      res.status(500).json({ error: "Error uploading Video" });
+    }
+  }
+);
+
+videoRoutes.put(":id/title",verifyAccessToken, async (req, res) => {
   const videoId = req.params.id;
   const newTitle = req.body.title;
   try {
@@ -102,12 +107,12 @@ videoRoutes.put(":id/title", async (req, res) => {
     await video.save();
     res.json({ message: "Title Updated Successfully", title: video.title });
   } catch (error) {
-    logger.error("Failed to update title of the  video.")
+    logger.error("Failed to update title of the  video.");
     res.json({ error: "Failed to update title of the  video." });
   }
 });
 
-videoRoutes.put(":id/descriptions", async (req, res) => {
+videoRoutes.put(":id/descriptions",verifyAccessToken, async (req, res) => {
   const videoId = req.params.id;
   const { description } = req.body;
   try {
@@ -121,7 +126,7 @@ videoRoutes.put(":id/descriptions", async (req, res) => {
   }
 });
 
-videoRoutes.put(":id/like", async (req, res) => {
+videoRoutes.put(":id/like",verifyAccessToken, async (req, res) => {
   const videoId = req.params.id;
   try {
     const video = await Video.findByPk(videoId);
@@ -135,7 +140,7 @@ videoRoutes.put(":id/like", async (req, res) => {
   }
 });
 
-videoRoutes.put(":id/dislike", async (req, res) => {
+videoRoutes.put(":id/dislike",verifyAccessToken, async (req, res) => {
   const videoId = req.params.id;
   try {
     const video = await Video.findByPk(videoId);
@@ -148,7 +153,7 @@ videoRoutes.put(":id/dislike", async (req, res) => {
   }
 });
 
-videoRoutes.put(":id/view", async (req, res) => {
+videoRoutes.put(":id/view",verifyAccessToken, async (req, res) => {
   const videoId = req.params.id;
   try {
     const video = await Video.findByPk(videoId);
@@ -161,7 +166,7 @@ videoRoutes.put(":id/view", async (req, res) => {
   }
 });
 
-videoRoutes.put(":id/visibility", async (req, res) => {
+videoRoutes.put(":id/visibility",verifyAccessToken, async (req, res) => {
   const videoId = req.params.id;
   const { visibility } = req.body;
   const validVisibilities = ["public", "private", "unlisted"];
@@ -182,7 +187,7 @@ videoRoutes.put(":id/visibility", async (req, res) => {
   }
 });
 
-videoRoutes.put(":id/category", async (req, res) => {
+videoRoutes.put(":id/category", verifyAccessToken,async (req, res) => {
   const videoId = req.params.id;
   const { category } = req.body;
 
@@ -202,6 +207,5 @@ videoRoutes.put(":id/category", async (req, res) => {
     res.json({ error: "Failed to update visibility of the video." });
   }
 });
-
 
 export default videoRoutes;

@@ -19,7 +19,7 @@ const Video = sequelize.define(
     },
     title: {
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
     },
     description: {
       type: DataTypes.TEXT,
@@ -35,12 +35,12 @@ const Video = sequelize.define(
     },
     visibility: {
       type: DataTypes.ENUM("public", "private", "unlisted"),
-      defaultValue: "public",
+      defaultValue: "private",
     },
-    duration: { type: DataTypes.INTEGER },
+    duration: { type: DataTypes.INTEGER,allowNull:true },
     views: { type: DataTypes.INTEGER, defaultValue: 0 },
     likes: { type: DataTypes.INTEGER, defaultValue: 0 },
-    dislike: { type: DataTypes.INTEGER, defaultValue: 0 },
+    dislike: { type: DataTypes.INTEGER, defaultValue: 0},
     category: {
       type: DataTypes.ENUM(
         "Cars and Vehicles",
